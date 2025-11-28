@@ -12,9 +12,9 @@ generated/*.png
 generated/*.jpg
 !generated/.gitkeep
 
-# Fonts directory (keep fonts, ignore cache)
-fonts/*.ttf
-!fonts/.gitkeep
+# Fonts directory - KEEP FONTS IN REPO
+# fonts/*.ttf
+# !fonts/.gitkeep
 
 # IDE
 .vscode/
