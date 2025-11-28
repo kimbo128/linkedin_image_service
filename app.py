@@ -89,16 +89,8 @@ def generate_slide_image(slide_data, output_path):
     main_text_raw = slide_data.get('mainText', '')
     sub_text_raw = slide_data.get('subText', '')
     
-    # Debug output
-    print(f"=== SLIDE {slide_number} ===", flush=True)
-    print(f"Raw mainText: {repr(main_text_raw)}", flush=True)
-    print(f"Raw subText: {repr(sub_text_raw)}", flush=True)
-    
     main_text = str(main_text_raw).strip() if main_text_raw else ''
     sub_text = str(sub_text_raw).strip() if sub_text_raw else ''
-    
-    print(f"Processed mainText: '{main_text}' (len={len(main_text)})", flush=True)
-    print(f"Processed subText: '{sub_text}' (len={len(sub_text)})", flush=True)
     
     slide_type = slide_data.get('type', 'content')
     
@@ -122,28 +114,21 @@ def generate_slide_image(slide_data, output_path):
     main_font = get_font(90, bold=True)
     sub_font = get_font(55, bold=False)
     
-    # Wrap text - ALWAYS try to wrap, even if empty
+    # Wrap text
     main_lines = []
     sub_lines = []
     
     if main_text:
         main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw)
-        print(f"Main text wrapped into {len(main_lines)} lines: {main_lines}", flush=True)
-    else:
-        print(f"WARNING: Slide {slide_number} has NO main_text!", flush=True)
     
     if sub_text:
         sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw)
-        print(f"Sub text wrapped into {len(sub_lines)} lines: {sub_lines}", flush=True)
-    else:
-        print(f"WARNING: Slide {slide_number} has NO sub_text!", flush=True)
     
     # Calculate position
     total_lines = len(main_lines) + len(sub_lines)
-    print(f"Total lines to draw: {total_lines}", flush=True)
     
     if total_lines == 0:
-        print(f"ERROR: Slide {slide_number} has NO TEXT AT ALL! Saving empty image.", flush=True)
+        # No text - save empty image
         img.save(output_path, 'PNG')
         return output_path
     
@@ -185,6 +170,8 @@ def generate_slide_image(slide_data, output_path):
 @app.route('/generate-carousel', methods=['POST'])
 def generate_carousel():
     """Generate carousel images"""
+    debug_info = []
+    
     try:
         data = request.get_json()
         if not data or 'slides' not in data:
@@ -196,10 +183,35 @@ def generate_carousel():
         request_id = str(uuid.uuid4())[:8]
         
         for idx, slide in enumerate(slides, 1):
+            slide_debug = {
+                'index': idx,
+                'slideNumber': slide.get('slideNumber', idx),
+                'raw_data': {
+                    'mainText': repr(slide.get('mainText', '')),
+                    'subText': repr(slide.get('subText', '')),
+                    'type': slide.get('type', 'content')
+                }
+            }
+            
             filename = f"image_{timestamp}_{request_id}_{idx}.png"
             output_path = os.path.join(GENERATED_DIR, filename)
             
-            generate_slide_image(slide, output_path)
+            # Generate and capture debug info
+            try:
+                generate_slide_image(slide, output_path)
+                slide_debug['status'] = 'success'
+                
+                # Check if file was created
+                if os.path.exists(output_path):
+                    slide_debug['file_size'] = os.path.getsize(output_path)
+                else:
+                    slide_debug['status'] = 'error'
+                    slide_debug['error'] = 'File not created'
+            except Exception as e:
+                slide_debug['status'] = 'error'
+                slide_debug['error'] = str(e)
+            
+            debug_info.append(slide_debug)
             
             base_url = request.url_root.rstrip('/')
             generated_images.append({
@@ -211,11 +223,15 @@ def generate_carousel():
         return jsonify({
             'success': True,
             'images': generated_images,
-            'count': len(generated_images)
+            'count': len(generated_images),
+            'debug': debug_info
         })
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            'error': str(e),
+            'debug': debug_info
+        }), 500
 
 @app.route('/download/<filename>', methods=['GET'])
 def download_image(filename):
