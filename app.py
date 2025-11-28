@@ -10,9 +10,25 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+# Configure logging with handler that captures logs
+import sys
+from logging.handlers import MemoryHandler
+
+# Create a custom handler that stores logs
+log_buffer = []
+class ListHandler(logging.Handler):
+    def emit(self, record):
+        log_buffer.append(self.format(record))
+        # Also print to stdout/stderr for Railway logs
+        print(self.format(record), file=sys.stdout)
+        sys.stdout.flush()
+
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+handler = ListHandler()
+handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
 app.logger.setLevel(logging.INFO)
+app.logger.addHandler(handler)
 
 # Configuration
 TEMPLATE_DIR = 'templates'
@@ -501,7 +517,8 @@ def debug_fonts():
         'fonts_dir': FONTS_DIR,
         'fonts_dir_exists': os.path.exists(FONTS_DIR),
         'fonts_dir_contents': [],
-        'test_fonts': {}
+        'test_fonts': {},
+        'recent_logs': log_buffer[-50:] if len(log_buffer) > 0 else []
     }
     
     if os.path.exists(FONTS_DIR):
@@ -526,6 +543,15 @@ def debug_fonts():
                 }
     
     return jsonify(results)
+
+@app.route('/debug/logs', methods=['GET'])
+def debug_logs():
+    """Get recent logs"""
+    return jsonify({
+        'total_logs': len(log_buffer),
+        'recent_logs': log_buffer[-100:] if len(log_buffer) > 0 else [],
+        'message': 'Logs are being captured. Check /debug/fonts for font-specific logs.'
+    })
 
 @app.route('/', methods=['GET'])
 def index():
