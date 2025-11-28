@@ -24,31 +24,83 @@ MAX_TEXT_WIDTH = IMAGE_WIDTH - (2 * PADDING)
 # Ensure directories exist
 os.makedirs(GENERATED_DIR, exist_ok=True)
 
-def get_font(size):
-    """Get font, fallback to default if custom font not available"""
-    font_paths = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "/System/Library/Fonts/HelveticaNeue.ttc",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf"
+def find_font_file(filename):
+    """Search for font file in common system directories"""
+    search_dirs = [
+        "/usr/share/fonts",
+        "/usr/local/share/fonts",
+        "/System/Library/Fonts",
+        "/Library/Fonts",
+        "~/.fonts",
+        "/opt/homebrew/share/fonts"
     ]
     
-    for font_path in font_paths:
-        try:
-            if os.path.exists(font_path):
-                font = ImageFont.truetype(font_path, size)
-                app.logger.info(f"Loaded font from {font_path} at size {size}")
-                return font
-        except Exception as e:
-            app.logger.debug(f"Failed to load font from {font_path}: {str(e)}")
+    for search_dir in search_dirs:
+        expanded_dir = os.path.expanduser(search_dir)
+        if not os.path.exists(expanded_dir):
             continue
+        
+        # Search recursively
+        for root, dirs, files in os.walk(expanded_dir):
+            if filename in files:
+                font_path = os.path.join(root, filename)
+                try:
+                    # Test if we can actually load it
+                    test_font = ImageFont.truetype(font_path, 12)
+                    app.logger.info(f"Found font: {font_path}")
+                    return font_path
+                except:
+                    continue
     
-    # Fallback: Use default font (will be small but better than nothing)
-    app.logger.warning(f"Using default font at requested size {size} (may appear smaller)")
+    return None
+
+def get_font(size, bold=False):
+    """Get font, fallback to default if custom font not available"""
+    # Try to find DejaVu Sans fonts first (common on Linux systems)
+    if bold:
+        font_file = find_font_file("DejaVuSans-Bold.ttf")
+        if not font_file:
+            font_file = find_font_file("DejaVuSans-Bold.ttf")
+    else:
+        font_file = find_font_file("DejaVuSans.ttf")
+        if not font_file:
+            font_file = find_font_file("DejaVuSans-Regular.ttf")
+    
+    # Try Liberation Sans as fallback
+    if not font_file:
+        if bold:
+            font_file = find_font_file("LiberationSans-Bold.ttf")
+        else:
+            font_file = find_font_file("LiberationSans-Regular.ttf")
+    
+    # Try Arial or Helvetica
+    if not font_file:
+        font_file = find_font_file("Arial.ttf")
+    if not font_file:
+        font_file = find_font_file("Helvetica.ttc")
+    
+    # Direct paths as last resort
+    if not font_file:
+        direct_paths = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        ]
+        for path in direct_paths:
+            if os.path.exists(path):
+                font_file = path
+                break
+    
+    if font_file:
+        try:
+            font = ImageFont.truetype(font_file, size)
+            app.logger.info(f"Successfully loaded font from {font_file} at size {size}")
+            return font
+        except Exception as e:
+            app.logger.error(f"Failed to load font from {font_file}: {str(e)}")
+    
+    # Last resort: Try to use ImageFont.load_default() but warn
+    app.logger.error(f"CRITICAL: No suitable font found! Using default font at size {size} (will be VERY small)")
+    app.logger.error("This will result in unreadable text. Please ensure system fonts are available.")
     default_font = ImageFont.load_default()
     return default_font
 
@@ -121,8 +173,9 @@ def generate_slide_image(slide_data, output_path):
     draw = ImageDraw.Draw(img)
     
     # Increased font sizes for better visibility - much larger for readability
-    main_font = get_font(100)
-    sub_font = get_font(60)
+    # Use bold for main text
+    main_font = get_font(100, bold=True)
+    sub_font = get_font(60, bold=False)
     
     # Only process text if it exists and is not empty
     main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw) if main_text else []
