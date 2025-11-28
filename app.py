@@ -4,6 +4,7 @@ import os
 import logging
 import uuid
 import base64
+import urllib.request
 from io import BytesIO
 from datetime import datetime
 
@@ -16,6 +17,7 @@ app.logger.setLevel(logging.INFO)
 # Configuration
 TEMPLATE_DIR = 'templates'
 GENERATED_DIR = 'generated'
+FONTS_DIR = 'fonts'
 IMAGE_WIDTH = 1200
 IMAGE_HEIGHT = 1500
 PADDING = 100
@@ -23,9 +25,35 @@ MAX_TEXT_WIDTH = IMAGE_WIDTH - (2 * PADDING)
 
 # Ensure directories exist
 os.makedirs(GENERATED_DIR, exist_ok=True)
+os.makedirs(FONTS_DIR, exist_ok=True)
+
+def download_font(url, filename):
+    """Download font file if not exists"""
+    font_path = os.path.join(FONTS_DIR, filename)
+    if os.path.exists(font_path):
+        return font_path
+    
+    try:
+        app.logger.info(f"Downloading font from {url}")
+        urllib.request.urlretrieve(url, font_path)
+        app.logger.info(f"Downloaded font to {font_path}")
+        return font_path
+    except Exception as e:
+        app.logger.error(f"Failed to download font: {str(e)}")
+        return None
 
 def find_font_file(filename):
-    """Search for font file in common system directories"""
+    """Search for font file in common system directories and local fonts directory"""
+    # First check local fonts directory
+    local_font = os.path.join(FONTS_DIR, filename)
+    if os.path.exists(local_font):
+        try:
+            test_font = ImageFont.truetype(local_font, 12)
+            app.logger.info(f"Found font in local directory: {local_font}")
+            return local_font
+        except:
+            pass
+    
     search_dirs = [
         "/usr/share/fonts",
         "/usr/local/share/fonts",
@@ -59,8 +87,6 @@ def get_font(size, bold=False):
     # Try to find DejaVu Sans fonts first (common on Linux systems)
     if bold:
         font_file = find_font_file("DejaVuSans-Bold.ttf")
-        if not font_file:
-            font_file = find_font_file("DejaVuSans-Bold.ttf")
     else:
         font_file = find_font_file("DejaVuSans.ttf")
         if not font_file:
@@ -89,6 +115,22 @@ def get_font(size, bold=False):
             if os.path.exists(path):
                 font_file = path
                 break
+    
+    # If still no font found, try downloading Roboto (Google Fonts)
+    if not font_file:
+        try:
+            if bold:
+                font_file = download_font(
+                    "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf",
+                    "Roboto-Bold.ttf"
+                )
+            else:
+                font_file = download_font(
+                    "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf",
+                    "Roboto-Regular.ttf"
+                )
+        except Exception as e:
+            app.logger.warning(f"Could not download Roboto font: {str(e)}")
     
     if font_file:
         try:
