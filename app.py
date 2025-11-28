@@ -27,6 +27,30 @@ MAX_TEXT_WIDTH = IMAGE_WIDTH - (2 * PADDING)
 os.makedirs(GENERATED_DIR, exist_ok=True)
 os.makedirs(FONTS_DIR, exist_ok=True)
 
+# Pre-download fonts on startup to ensure they're available
+def ensure_fonts_available():
+    """Download fonts if not available locally"""
+    fonts_to_download = [
+        ("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf", "Roboto-Regular.ttf"),
+        ("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf", "Roboto-Bold.ttf"),
+    ]
+    
+    for url, filename in fonts_to_download:
+        font_path = os.path.join(FONTS_DIR, filename)
+        if not os.path.exists(font_path):
+            try:
+                app.logger.info(f"Downloading font: {filename}")
+                urllib.request.urlretrieve(url, font_path)
+                app.logger.info(f"Successfully downloaded {filename}")
+            except Exception as e:
+                app.logger.warning(f"Could not download {filename}: {str(e)}")
+
+# Download fonts on startup
+try:
+    ensure_fonts_available()
+except Exception as e:
+    app.logger.error(f"Error downloading fonts on startup: {str(e)}")
+
 def download_font(url, filename):
     """Download font file if not exists"""
     font_path = os.path.join(FONTS_DIR, filename)
@@ -84,28 +108,35 @@ def find_font_file(filename):
 
 def get_font(size, bold=False):
     """Get font, fallback to default if custom font not available"""
-    # Try to find DejaVu Sans fonts first (common on Linux systems)
+    # Priority 1: Try Roboto fonts (downloaded on startup)
     if bold:
-        font_file = find_font_file("DejaVuSans-Bold.ttf")
+        font_file = find_font_file("Roboto-Bold.ttf")
     else:
-        font_file = find_font_file("DejaVuSans.ttf")
-        if not font_file:
-            font_file = find_font_file("DejaVuSans-Regular.ttf")
+        font_file = find_font_file("Roboto-Regular.ttf")
     
-    # Try Liberation Sans as fallback
+    # Priority 2: Try DejaVu Sans fonts (system fonts)
+    if not font_file:
+        if bold:
+            font_file = find_font_file("DejaVuSans-Bold.ttf")
+        else:
+            font_file = find_font_file("DejaVuSans.ttf")
+            if not font_file:
+                font_file = find_font_file("DejaVuSans-Regular.ttf")
+    
+    # Priority 3: Try Liberation Sans as fallback
     if not font_file:
         if bold:
             font_file = find_font_file("LiberationSans-Bold.ttf")
         else:
             font_file = find_font_file("LiberationSans-Regular.ttf")
     
-    # Try Arial or Helvetica
+    # Priority 4: Try Arial or Helvetica
     if not font_file:
         font_file = find_font_file("Arial.ttf")
     if not font_file:
         font_file = find_font_file("Helvetica.ttc")
     
-    # Direct paths as last resort
+    # Priority 5: Direct paths as last resort
     if not font_file:
         direct_paths = [
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -115,22 +146,6 @@ def get_font(size, bold=False):
             if os.path.exists(path):
                 font_file = path
                 break
-    
-    # If still no font found, try downloading Roboto (Google Fonts)
-    if not font_file:
-        try:
-            if bold:
-                font_file = download_font(
-                    "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf",
-                    "Roboto-Bold.ttf"
-                )
-            else:
-                font_file = download_font(
-                    "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf",
-                    "Roboto-Regular.ttf"
-                )
-        except Exception as e:
-            app.logger.warning(f"Could not download Roboto font: {str(e)}")
     
     if font_file:
         try:
