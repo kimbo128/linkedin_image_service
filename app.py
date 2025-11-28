@@ -86,8 +86,10 @@ def draw_text_centered(draw, text, font, y, color=(0, 0, 0)):
 def generate_slide_image(slide_data, output_path):
     """Generate slide image - SIMPLE AND DIRECT"""
     slide_number = slide_data.get('slideNumber', 1)
-    main_text_raw = slide_data.get('mainText', '')
-    sub_text_raw = slide_data.get('subText', '')
+    
+    # Support both formats: mainText/subText AND title/subtitle
+    main_text_raw = slide_data.get('mainText') or slide_data.get('title', '')
+    sub_text_raw = slide_data.get('subText') or slide_data.get('subtitle', '')
     
     main_text = str(main_text_raw).strip() if main_text_raw else ''
     sub_text = str(sub_text_raw).strip() if sub_text_raw else ''
@@ -189,7 +191,13 @@ def generate_carousel():
                 'raw_data': {
                     'mainText': repr(slide.get('mainText', '')),
                     'subText': repr(slide.get('subText', '')),
+                    'title': repr(slide.get('title', '')),
+                    'subtitle': repr(slide.get('subtitle', '')),
                     'type': slide.get('type', 'content')
+                },
+                'processed': {
+                    'mainText': repr(slide.get('mainText') or slide.get('title', '')),
+                    'subText': repr(slide.get('subText') or slide.get('subtitle', ''))
                 }
             }
             
