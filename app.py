@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify, send_file
 from PIL import Image, ImageDraw, ImageFont
 import os
 import logging
+import uuid
+import base64
+from io import BytesIO
 from datetime import datetime
 
 app = Flask(__name__)
@@ -119,6 +122,9 @@ def generate_slide_image(slide_data, output_path):
     main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw) if main_text else []
     sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw) if sub_text else []
     
+    # Debug: Log text information
+    app.logger.info(f"Slide {slide_number}: mainText='{main_text[:50]}...', subText='{sub_text[:50]}...', main_lines={len(main_lines)}, sub_lines={len(sub_lines)}")
+    
     # Debug: Log if no text to draw
     if not main_lines and not sub_lines:
         app.logger.warning(f"Slide {slide_number} has no text to draw. mainText: '{main_text}', subText: '{sub_text}'")
@@ -157,14 +163,33 @@ def generate_slide_image(slide_data, output_path):
             current_y += int(line_height * 1.5)
     
     # Ensure directory exists
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
     
-    # Save image
-    img.save(output_path, 'PNG')
-    
-    # Verify file was saved
-    if not os.path.exists(output_path):
-        raise IOError(f"Failed to save image to {output_path}")
+    # Save image atomically using a temporary file first
+    temp_path = output_path + '.tmp'
+    try:
+        img.save(temp_path, 'PNG')
+        
+        # Atomic rename (works on Unix/Linux, Railway)
+        if os.path.exists(temp_path):
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            os.rename(temp_path, output_path)
+        
+        # Verify file was saved
+        if not os.path.exists(output_path):
+            raise IOError(f"Failed to save image to {output_path}")
+        
+        app.logger.info(f"Successfully saved image to {output_path}")
+        
+    except Exception as e:
+        # Clean up temp file if it exists
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+        raise IOError(f"Failed to save image: {str(e)}")
     
     return output_path
 
@@ -180,10 +205,12 @@ def generate_carousel():
         slides = data['slides']
         generated_images = []
         
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # Generate unique identifier for this request to avoid collisions
+        request_id = str(uuid.uuid4())[:8]
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')[:-3]  # Include milliseconds
         
         for idx, slide in enumerate(slides, 1):
-            output_filename = f"image_{timestamp}_{idx}.png"
+            output_filename = f"image_{timestamp}_{request_id}_{idx}.png"
             output_path = os.path.join(GENERATED_DIR, output_filename)
             
             try:
@@ -192,6 +219,10 @@ def generate_carousel():
                 # Verify file exists after generation
                 if not os.path.exists(output_path):
                     raise FileNotFoundError(f"Generated file not found: {output_path}")
+                
+                # Get file size for logging
+                file_size = os.path.getsize(output_path)
+                app.logger.info(f"Generated slide {idx}: {output_filename} ({file_size} bytes)")
                 
                 base_url = request.url_root.rstrip('/')
                 
