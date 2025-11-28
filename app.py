@@ -86,8 +86,20 @@ def draw_text_centered(draw, text, font, y, color=(0, 0, 0)):
 def generate_slide_image(slide_data, output_path):
     """Generate slide image - SIMPLE AND DIRECT"""
     slide_number = slide_data.get('slideNumber', 1)
-    main_text = str(slide_data.get('mainText', '')).strip()
-    sub_text = str(slide_data.get('subText', '')).strip()
+    main_text_raw = slide_data.get('mainText', '')
+    sub_text_raw = slide_data.get('subText', '')
+    
+    # Debug output
+    print(f"=== SLIDE {slide_number} ===", flush=True)
+    print(f"Raw mainText: {repr(main_text_raw)}", flush=True)
+    print(f"Raw subText: {repr(sub_text_raw)}", flush=True)
+    
+    main_text = str(main_text_raw).strip() if main_text_raw else ''
+    sub_text = str(sub_text_raw).strip() if sub_text_raw else ''
+    
+    print(f"Processed mainText: '{main_text}' (len={len(main_text)})", flush=True)
+    print(f"Processed subText: '{sub_text}' (len={len(sub_text)})", flush=True)
+    
     slide_type = slide_data.get('type', 'content')
     
     # Choose template
@@ -110,14 +122,28 @@ def generate_slide_image(slide_data, output_path):
     main_font = get_font(90, bold=True)
     sub_font = get_font(55, bold=False)
     
-    # Wrap text
-    main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw) if main_text else []
-    sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw) if sub_text else []
+    # Wrap text - ALWAYS try to wrap, even if empty
+    main_lines = []
+    sub_lines = []
+    
+    if main_text:
+        main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw)
+        print(f"Main text wrapped into {len(main_lines)} lines: {main_lines}", flush=True)
+    else:
+        print(f"WARNING: Slide {slide_number} has NO main_text!", flush=True)
+    
+    if sub_text:
+        sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw)
+        print(f"Sub text wrapped into {len(sub_lines)} lines: {sub_lines}", flush=True)
+    else:
+        print(f"WARNING: Slide {slide_number} has NO sub_text!", flush=True)
     
     # Calculate position
     total_lines = len(main_lines) + len(sub_lines)
+    print(f"Total lines to draw: {total_lines}", flush=True)
+    
     if total_lines == 0:
-        print(f"WARNING: Slide {slide_number} has no text!")
+        print(f"ERROR: Slide {slide_number} has NO TEXT AT ALL! Saving empty image.", flush=True)
         img.save(output_path, 'PNG')
         return output_path
     
