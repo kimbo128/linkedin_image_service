@@ -1,9 +1,14 @@
 from flask import Flask, request, jsonify, send_file
 from PIL import Image, ImageDraw, ImageFont
 import os
+import logging
 from datetime import datetime
 
 app = Flask(__name__)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+app.logger.setLevel(logging.INFO)
 
 # Configuration
 TEMPLATE_DIR = 'templates'
