@@ -2,8 +2,6 @@ from flask import Flask, request, jsonify, send_file
 from PIL import Image, ImageDraw, ImageFont
 import os
 import urllib.request
-import base64
-from io import BytesIO
 from datetime import datetime
 import uuid
 
@@ -237,27 +235,13 @@ def generate_carousel():
                 slide_debug['status'] = 'success'
                 
                 # Check if file was created
-                if os.path.exists(output_path):
-                    file_size = os.path.getsize(output_path)
-                    slide_debug['file_size'] = file_size
-                    slide_debug['file_path'] = os.path.abspath(output_path)
-                    
-                    # Read image and convert to base64 for direct delivery
-                    with open(output_path, 'rb') as f:
-                        image_data = f.read()
-                        image_base64 = base64.b64encode(image_data).decode('utf-8')
-                    
-                    base_url = request.url_root.rstrip('/')
-                    generated_images.append({
-                        'slideNumber': slide.get('slideNumber', idx),
-                        'url': f'{base_url}/download/{filename}',
-                        'filename': filename,
-                        'dataUrl': f'data:image/png;base64,{image_base64}',
-                        'fileSize': file_size
-                    })
+                abs_path = os.path.abspath(output_path)
+                if os.path.exists(abs_path):
+                    slide_debug['file_size'] = os.path.getsize(abs_path)
+                    slide_debug['file_path'] = abs_path
                 else:
                     slide_debug['status'] = 'error'
-                    slide_debug['error'] = f'File not created at {os.path.abspath(output_path)}'
+                    slide_debug['error'] = f'File not found at {abs_path}'
                     slide_debug['generated_dir'] = os.path.abspath(GENERATED_DIR)
                     slide_debug['dir_exists'] = os.path.exists(GENERATED_DIR)
                     if os.path.exists(GENERATED_DIR):
@@ -265,10 +249,15 @@ def generate_carousel():
             except Exception as e:
                 slide_debug['status'] = 'error'
                 slide_debug['error'] = str(e)
-                import traceback
-                slide_debug['traceback'] = traceback.format_exc()
             
             debug_info.append(slide_debug)
+            
+            base_url = request.url_root.rstrip('/')
+            generated_images.append({
+                'slideNumber': slide.get('slideNumber', idx),
+                'url': f'{base_url}/download/{filename}',
+                'filename': filename
+            })
         
         return jsonify({
             'success': True,
