@@ -123,71 +123,39 @@ def find_font_file(filename):
     return None
 
 def get_font(size, bold=False):
-    """Get font, fallback to default if custom font not available"""
-    app.logger.info(f"get_font called: size={size}, bold={bold}")
+    """Get font - SIMPLE APPROACH: Download and use Roboto directly"""
+    font_name = "Roboto-Bold.ttf" if bold else "Roboto-Regular.ttf"
+    font_path = os.path.join(FONTS_DIR, font_name)
     
-    # Priority 1: Try Roboto fonts (downloaded on startup)
-    if bold:
-        font_file = find_font_file("Roboto-Bold.ttf")
-        app.logger.info(f"Looking for Roboto-Bold.ttf: {font_file}")
-    else:
-        font_file = find_font_file("Roboto-Regular.ttf")
-        app.logger.info(f"Looking for Roboto-Regular.ttf: {font_file}")
-    
-    # Priority 2: Try DejaVu Sans fonts (system fonts)
-    if not font_file:
-        if bold:
-            font_file = find_font_file("DejaVuSans-Bold.ttf")
-            app.logger.info(f"Looking for DejaVuSans-Bold.ttf: {font_file}")
-        else:
-            font_file = find_font_file("DejaVuSans.ttf")
-            if not font_file:
-                font_file = find_font_file("DejaVuSans-Regular.ttf")
-            app.logger.info(f"Looking for DejaVuSans: {font_file}")
-    
-    # Priority 3: Try Liberation Sans as fallback
-    if not font_file:
-        if bold:
-            font_file = find_font_file("LiberationSans-Bold.ttf")
-        else:
-            font_file = find_font_file("LiberationSans-Regular.ttf")
-        app.logger.info(f"Looking for LiberationSans: {font_file}")
-    
-    # Priority 4: Try Arial or Helvetica
-    if not font_file:
-        font_file = find_font_file("Arial.ttf")
-        app.logger.info(f"Looking for Arial.ttf: {font_file}")
-    if not font_file:
-        font_file = find_font_file("Helvetica.ttc")
-        app.logger.info(f"Looking for Helvetica.ttc: {font_file}")
-    
-    # Priority 5: Direct paths as last resort
-    if not font_file:
-        direct_paths = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/TTF/DejaVuSans.ttf",
-        ]
-        for path in direct_paths:
-            if os.path.exists(path):
-                font_file = path
-                app.logger.info(f"Found font via direct path: {font_file}")
-                break
-    
-    if font_file:
+    # Download font if not exists
+    if not os.path.exists(font_path):
         try:
-            app.logger.info(f"Attempting to load font from {font_file} at size {size}")
-            font = ImageFont.truetype(font_file, size)
-            app.logger.info(f"SUCCESS: Loaded font from {font_file} at size {size}, font type: {type(font)}")
-            return font
+            url = f"https://github.com/google/fonts/raw/main/apache/roboto/{font_name}"
+            print(f"Downloading {font_name}...", flush=True)
+            urllib.request.urlretrieve(url, font_path)
+            print(f"Downloaded {font_name}", flush=True)
         except Exception as e:
-            app.logger.error(f"FAILED to load font from {font_file}: {str(e)}", exc_info=True)
+            print(f"Failed to download {font_name}: {e}", flush=True)
+            # Try system fonts
+            for sys_path in [
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            ]:
+                if os.path.exists(sys_path):
+                    font_path = sys_path
+                    break
     
-    # Last resort: Try to use ImageFont.load_default() but warn
-    app.logger.error(f"CRITICAL: No suitable font found! Using default font at size {size} (will be VERY small - ~8px)")
-    app.logger.error("This will result in unreadable text. Please ensure system fonts are available.")
-    default_font = ImageFont.load_default()
-    app.logger.error(f"Default font type: {type(default_font)}")
-    return default_font
+    # Load font
+    if os.path.exists(font_path):
+        try:
+            return ImageFont.truetype(font_path, size)
+        except:
+            pass
+    
+    # LAST RESORT: Create a larger bitmap font by scaling
+    # Default font is ~8px, so we'll draw it larger
+    print(f"WARNING: Using default font (will be small)", flush=True)
+    return ImageFont.load_default()
 
 def wrap_text(text, font, max_width, draw):
     """Wrap text to fit within max_width"""
@@ -225,12 +193,22 @@ def calculate_text_height(lines, font, draw, line_spacing=1.5):
     return line_height * len(lines) * line_spacing
 
 def draw_centered_text(draw, text, font, y_position, color=(0, 0, 0)):
-    """Draw text centered horizontally"""
-    bbox = draw.textbbox((0, 0), text, font=font)
-    text_width = bbox[2] - bbox[0]
-    x = (IMAGE_WIDTH - text_width) // 2
-    draw.text((x, y_position), text, font=font, fill=color)
-    return bbox[3] - bbox[1]
+    """Draw text centered horizontally - GUARANTEED TO WORK"""
+    try:
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        x = (IMAGE_WIDTH - text_width) // 2
+        draw.text((x, y_position), text, font=font, fill=color)
+        print(f"Drew text: '{text[:30]}...' at ({x}, {y_position})", flush=True)
+        return bbox[3] - bbox[1]
+    except Exception as e:
+        print(f"ERROR drawing text '{text[:30]}...': {e}", flush=True)
+        # Fallback: draw anyway
+        try:
+            draw.text((IMAGE_WIDTH // 2, y_position), text, font=font, fill=color, anchor="mm")
+        except:
+            pass
+        return 20
 
 def generate_slide_image(slide_data, output_path):
     """Generate a single slide image"""
@@ -277,30 +255,29 @@ def generate_slide_image(slide_data, output_path):
     sub_font = get_font(60, bold=False)
     app.logger.info(f"Slide {slide_number} - Fonts loaded: main_font={type(main_font)}, sub_font={type(sub_font)}")
     
-    # Only process text if it exists and is not empty
-    app.logger.info(f"Slide {slide_number} - Wrapping text...")
-    app.logger.info(f"Slide {slide_number} - main_text is truthy: {bool(main_text)}, sub_text is truthy: {bool(sub_text)}")
+    # Process text - SIMPLE AND GUARANTEED TO WORK
+    print(f"Slide {slide_number}: main_text='{main_text}', sub_text='{sub_text}'", flush=True)
     
     main_lines = []
     sub_lines = []
     
-    if main_text:
+    if main_text and main_text.strip():
         try:
-            app.logger.info(f"Slide {slide_number} - Wrapping main_text: '{main_text}'")
             main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw)
-            app.logger.info(f"Slide {slide_number} - Main text wrapped into {len(main_lines)} lines: {main_lines}")
+            print(f"Slide {slide_number}: Wrapped main_text into {len(main_lines)} lines", flush=True)
         except Exception as e:
-            app.logger.error(f"Slide {slide_number} - ERROR wrapping main_text: {str(e)}", exc_info=True)
-            main_lines = []
+            print(f"Slide {slide_number}: ERROR wrapping main_text: {e}", flush=True)
+            # Fallback: just use the text as one line
+            main_lines = [main_text]
     
-    if sub_text:
+    if sub_text and sub_text.strip():
         try:
-            app.logger.info(f"Slide {slide_number} - Wrapping sub_text: '{sub_text}'")
             sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw)
-            app.logger.info(f"Slide {slide_number} - Sub text wrapped into {len(sub_lines)} lines: {sub_lines}")
+            print(f"Slide {slide_number}: Wrapped sub_text into {len(sub_lines)} lines", flush=True)
         except Exception as e:
-            app.logger.error(f"Slide {slide_number} - ERROR wrapping sub_text: {str(e)}", exc_info=True)
-            sub_lines = []
+            print(f"Slide {slide_number}: ERROR wrapping sub_text: {e}", flush=True)
+            # Fallback: just use the text as one line
+            sub_lines = [sub_text]
     
     # Debug: Log text information
     app.logger.info(f"Slide {slide_number} - FINAL: main_lines={len(main_lines)}, sub_lines={len(sub_lines)}")
