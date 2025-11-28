@@ -494,6 +494,39 @@ def health_check():
         'fonts_dir_contents': os.listdir(FONTS_DIR) if os.path.exists(FONTS_DIR) else []
     })
 
+@app.route('/debug/fonts', methods=['GET'])
+def debug_fonts():
+    """Debug endpoint to check font availability"""
+    results = {
+        'fonts_dir': FONTS_DIR,
+        'fonts_dir_exists': os.path.exists(FONTS_DIR),
+        'fonts_dir_contents': [],
+        'test_fonts': {}
+    }
+    
+    if os.path.exists(FONTS_DIR):
+        results['fonts_dir_contents'] = os.listdir(FONTS_DIR)
+    
+    # Test loading fonts
+    test_sizes = [60, 100]
+    for size in test_sizes:
+        for bold in [True, False]:
+            key = f"{size}px_{'bold' if bold else 'regular'}"
+            try:
+                font = get_font(size, bold=bold)
+                results['test_fonts'][key] = {
+                    'loaded': True,
+                    'type': str(type(font)),
+                    'is_default': 'default' in str(type(font)).lower()
+                }
+            except Exception as e:
+                results['test_fonts'][key] = {
+                    'loaded': False,
+                    'error': str(e)
+                }
+    
+    return jsonify(results)
+
 @app.route('/', methods=['GET'])
 def index():
     """Root endpoint with API documentation"""
@@ -503,7 +536,8 @@ def index():
         'endpoints': {
             'POST /generate-carousel': 'Generate carousel images from JSON',
             'GET /download/<filename>': 'Download generated image',
-            'GET /health': 'Health check'
+            'GET /health': 'Health check',
+            'GET /debug/fonts': 'Debug font availability'
         }
     })
 
