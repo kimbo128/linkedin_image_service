@@ -44,22 +44,22 @@ def download_font(font_type='regular'):
         return None
 
 def get_font(size, bold=False):
-    """Get font - 100% WORKING SOLUTION"""
-    font_type = 'bold' if bold else 'regular'
-    font_path = download_font(font_type)
+    """Get font - 100% WORKING: Use fonts directly from repository"""
+    font_filename = "Roboto-Bold.ttf" if bold else "Roboto-Regular.ttf"
+    font_path = os.path.join(FONTS_DIR, font_filename)
     
-    if font_path and os.path.exists(font_path):
+    # Use font from repository (guaranteed to exist)
+    if os.path.exists(font_path):
         try:
             font = ImageFont.truetype(font_path, size)
-            print(f"Loaded Roboto {font_type} at size {size}", flush=True)
+            print(f"SUCCESS: Loaded {font_filename} at size {size} from repository", flush=True)
             return font
         except Exception as e:
-            print(f"Failed to load font from {font_path}: {e}", flush=True)
+            print(f"ERROR loading font from {font_path}: {e}", flush=True)
     
     # Fallback: Try system fonts
     system_paths = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/TTF/DejaVuSans.ttf",
     ]
     
     for path in system_paths:
@@ -70,17 +70,8 @@ def get_font(size, bold=False):
                 continue
     
     # Last resort: default font (will be small)
-    print(f"WARNING: Using default font for size {size} - text will be small!", flush=True)
+    print(f"WARNING: Using default font for size {size} - text will be VERY small!", flush=True)
     return ImageFont.load_default()
-
-# Pre-download fonts on startup
-print("Initializing fonts...", flush=True)
-try:
-    download_font('regular')
-    download_font('bold')
-    print("Fonts ready!", flush=True)
-except Exception as e:
-    print(f"Warning: Could not pre-download fonts: {e}", flush=True)
 
 def wrap_text(text, font, max_width, draw):
     """Wrap text to fit width"""
