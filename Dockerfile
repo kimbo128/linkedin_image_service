@@ -22,9 +22,12 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p templates generated
 
-# Expose port
-EXPOSE $PORT
+# Make start script executable
+RUN chmod +x start.sh
+
+# Expose port (default 5000)
+EXPOSE 5000
 
 # Run the application
-CMD gunicorn app:app --bind 0.0.0.0:${PORT:-5000}
+CMD ["bash", "start.sh"]
 
