@@ -32,19 +32,25 @@ def get_font(size):
         "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/HelveticaNeue.ttc",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf"
     ]
     
     for font_path in font_paths:
         try:
             if os.path.exists(font_path):
-                return ImageFont.truetype(font_path, size)
-        except:
+                font = ImageFont.truetype(font_path, size)
+                app.logger.info(f"Loaded font from {font_path} at size {size}")
+                return font
+        except Exception as e:
+            app.logger.debug(f"Failed to load font from {font_path}: {str(e)}")
             continue
     
     # Fallback: Use default font (will be small but better than nothing)
-    # Note: Default font is typically 8-10px, so we'll use it as-is
-    return ImageFont.load_default()
+    app.logger.warning(f"Using default font at requested size {size} (may appear smaller)")
+    default_font = ImageFont.load_default()
+    return default_font
 
 def wrap_text(text, font, max_width, draw):
     """Wrap text to fit within max_width"""
@@ -114,9 +120,9 @@ def generate_slide_image(slide_data, output_path):
     img = Image.open(template_path).convert('RGBA')
     draw = ImageDraw.Draw(img)
     
-    # Increased font sizes for better visibility
-    main_font = get_font(80)
-    sub_font = get_font(48)
+    # Increased font sizes for better visibility - much larger for readability
+    main_font = get_font(100)
+    sub_font = get_font(60)
     
     # Only process text if it exists and is not empty
     main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw) if main_text else []
@@ -145,10 +151,12 @@ def generate_slide_image(slide_data, output_path):
     # Draw main text
     current_y = start_y
     if main_lines:
-        for line in main_lines:
+        app.logger.info(f"Drawing {len(main_lines)} main text lines starting at y={current_y}")
+        for idx, line in enumerate(main_lines):
             bbox = draw.textbbox((0, 0), line, font=main_font)
             line_height = bbox[3] - bbox[1]
             draw_centered_text(draw, line, main_font, current_y, color=(0, 0, 0))
+            app.logger.debug(f"Drew main line {idx+1}: '{line[:30]}...' at y={current_y}, height={line_height}")
             current_y += int(line_height * 1.5)
     
     if main_lines and sub_lines:
@@ -156,11 +164,19 @@ def generate_slide_image(slide_data, output_path):
     
     # Draw sub text
     if sub_lines:
-        for line in sub_lines:
+        app.logger.info(f"Drawing {len(sub_lines)} sub text lines starting at y={current_y}")
+        for idx, line in enumerate(sub_lines):
             bbox = draw.textbbox((0, 0), line, font=sub_font)
             line_height = bbox[3] - bbox[1]
             draw_centered_text(draw, line, sub_font, current_y, color=(60, 60, 60))
+            app.logger.debug(f"Drew sub line {idx+1}: '{line[:30]}...' at y={current_y}, height={line_height}")
             current_y += int(line_height * 1.5)
+    
+    # Verify that text was actually drawn
+    if main_lines or sub_lines:
+        app.logger.info(f"Completed drawing text for slide {slide_number}")
+    else:
+        app.logger.warning(f"No text was drawn for slide {slide_number}")
     
     # Ensure directory exists
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
