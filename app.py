@@ -22,15 +22,20 @@ def get_font(size):
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/System/Library/Fonts/Helvetica.ttc",
-        "/System/Library/Fonts/HelveticaNeue.ttc"
+        "/System/Library/Fonts/HelveticaNeue.ttc",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
     ]
     
     for font_path in font_paths:
         try:
-            return ImageFont.truetype(font_path, size)
+            if os.path.exists(font_path):
+                return ImageFont.truetype(font_path, size)
         except:
             continue
     
+    # Fallback: Use default font (will be small but better than nothing)
+    # Note: Default font is typically 8-10px, so we'll use it as-is
     return ImageFont.load_default()
 
 def wrap_text(text, font, max_width, draw):
@@ -79,8 +84,8 @@ def draw_centered_text(draw, text, font, y_position, color=(0, 0, 0)):
 def generate_slide_image(slide_data, output_path):
     """Generate a single slide image"""
     slide_number = slide_data.get('slideNumber', 1)
-    main_text = slide_data.get('mainText', '')
-    sub_text = slide_data.get('subText', '')
+    main_text = slide_data.get('mainText', '').strip()
+    sub_text = slide_data.get('subText', '').strip()
     slide_type = slide_data.get('type', 'content')
     
     # Determine which template to use
@@ -99,38 +104,46 @@ def generate_slide_image(slide_data, output_path):
     img = Image.open(template_path).convert('RGBA')
     draw = ImageDraw.Draw(img)
     
-    # Font sizes
-    main_font = get_font(60)
-    sub_font = get_font(36)
+    # Increased font sizes for better visibility
+    main_font = get_font(80)
+    sub_font = get_font(48)
     
-    # Wrap text
-    main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw)
-    sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw)
+    # Only process text if it exists
+    main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw) if main_text else []
+    sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw) if sub_text else []
     
     # Calculate heights
-    main_height = calculate_text_height(main_lines, main_font, draw)
-    sub_height = calculate_text_height(sub_lines, sub_font, draw)
-    spacing_between = 40
+    main_height = calculate_text_height(main_lines, main_font, draw) if main_lines else 0
+    sub_height = calculate_text_height(sub_lines, sub_font, draw) if sub_lines else 0
+    spacing_between = 50 if main_lines and sub_lines else 0
     
     total_height = main_height + spacing_between + sub_height
-    start_y = (IMAGE_HEIGHT - total_height) // 2
+    
+    # Center vertically, or start from top if no text
+    if total_height > 0:
+        start_y = (IMAGE_HEIGHT - total_height) // 2
+    else:
+        start_y = IMAGE_HEIGHT // 2
     
     # Draw main text
     current_y = start_y
-    for line in main_lines:
-        bbox = draw.textbbox((0, 0), line, font=main_font)
-        line_height = bbox[3] - bbox[1]
-        draw_centered_text(draw, line, main_font, current_y, color=(0, 0, 0))
-        current_y += int(line_height * 1.5)
+    if main_lines:
+        for line in main_lines:
+            bbox = draw.textbbox((0, 0), line, font=main_font)
+            line_height = bbox[3] - bbox[1]
+            draw_centered_text(draw, line, main_font, current_y, color=(0, 0, 0))
+            current_y += int(line_height * 1.5)
     
-    current_y += spacing_between
+    if main_lines and sub_lines:
+        current_y += spacing_between
     
     # Draw sub text
-    for line in sub_lines:
-        bbox = draw.textbbox((0, 0), line, font=sub_font)
-        line_height = bbox[3] - bbox[1]
-        draw_centered_text(draw, line, sub_font, current_y, color=(60, 60, 60))
-        current_y += int(line_height * 1.5)
+    if sub_lines:
+        for line in sub_lines:
+            bbox = draw.textbbox((0, 0), line, font=sub_font)
+            line_height = bbox[3] - bbox[1]
+            draw_centered_text(draw, line, sub_font, current_y, color=(60, 60, 60))
+            current_y += int(line_height * 1.5)
     
     img.save(output_path, 'PNG')
     return output_path
