@@ -84,8 +84,10 @@ def draw_centered_text(draw, text, font, y_position, color=(0, 0, 0)):
 def generate_slide_image(slide_data, output_path):
     """Generate a single slide image"""
     slide_number = slide_data.get('slideNumber', 1)
-    main_text = slide_data.get('mainText', '').strip()
-    sub_text = slide_data.get('subText', '').strip()
+    main_text = slide_data.get('mainText', '') or ''
+    sub_text = slide_data.get('subText', '') or ''
+    main_text = main_text.strip() if isinstance(main_text, str) else ''
+    sub_text = sub_text.strip() if isinstance(sub_text, str) else ''
     slide_type = slide_data.get('type', 'content')
     
     # Determine which template to use
@@ -108,9 +110,13 @@ def generate_slide_image(slide_data, output_path):
     main_font = get_font(80)
     sub_font = get_font(48)
     
-    # Only process text if it exists
+    # Only process text if it exists and is not empty
     main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw) if main_text else []
     sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw) if sub_text else []
+    
+    # Debug: Log if no text to draw
+    if not main_lines and not sub_lines:
+        app.logger.warning(f"Slide {slide_number} has no text to draw. mainText: '{main_text}', subText: '{sub_text}'")
     
     # Calculate heights
     main_height = calculate_text_height(main_lines, main_font, draw) if main_lines else 0
@@ -145,7 +151,16 @@ def generate_slide_image(slide_data, output_path):
             draw_centered_text(draw, line, sub_font, current_y, color=(60, 60, 60))
             current_y += int(line_height * 1.5)
     
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    # Save image
     img.save(output_path, 'PNG')
+    
+    # Verify file was saved
+    if not os.path.exists(output_path):
+        raise IOError(f"Failed to save image to {output_path}")
+    
     return output_path
 
 @app.route('/generate-carousel', methods=['POST'])
@@ -166,15 +181,24 @@ def generate_carousel():
             output_filename = f"image_{timestamp}_{idx}.png"
             output_path = os.path.join(GENERATED_DIR, output_filename)
             
-            generate_slide_image(slide, output_path)
-            
-            base_url = request.url_root.rstrip('/')
-            
-            generated_images.append({
-                'slideNumber': slide.get('slideNumber', idx),
-                'url': f'{base_url}/download/{output_filename}',
-                'filename': output_filename
-            })
+            try:
+                generate_slide_image(slide, output_path)
+                
+                # Verify file exists after generation
+                if not os.path.exists(output_path):
+                    raise FileNotFoundError(f"Generated file not found: {output_path}")
+                
+                base_url = request.url_root.rstrip('/')
+                
+                generated_images.append({
+                    'slideNumber': slide.get('slideNumber', idx),
+                    'url': f'{base_url}/download/{output_filename}',
+                    'filename': output_filename
+                })
+            except Exception as e:
+                # Log error but continue with other slides
+                app.logger.error(f"Error generating slide {idx}: {str(e)}")
+                raise
         
         return jsonify({
             'success': True,
@@ -189,13 +213,30 @@ def generate_carousel():
 def download_image(filename):
     """Download generated image"""
     try:
+        # Sanitize filename to prevent directory traversal
+        filename = os.path.basename(filename)
         file_path = os.path.join(GENERATED_DIR, filename)
+        
+        # Use absolute path
+        file_path = os.path.abspath(file_path)
+        
+        # Verify file is in the generated directory (security check)
+        generated_dir_abs = os.path.abspath(GENERATED_DIR)
+        if not file_path.startswith(generated_dir_abs):
+            return jsonify({'error': 'Invalid file path'}), 403
+        
         if not os.path.exists(file_path):
+            app.logger.error(f"File not found: {file_path} (GENERATED_DIR: {generated_dir_abs})")
+            # List available files for debugging
+            if os.path.exists(GENERATED_DIR):
+                available_files = os.listdir(GENERATED_DIR)
+                app.logger.info(f"Available files in {GENERATED_DIR}: {available_files}")
             return jsonify({'error': 'File not found'}), 404
         
         return send_file(file_path, mimetype='image/png')
     
     except Exception as e:
+        app.logger.error(f"Error downloading file {filename}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/health', methods=['GET'])
