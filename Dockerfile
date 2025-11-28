@@ -6,7 +6,9 @@ RUN apt-get update && apt-get install -y \
     libfreetype6-dev \
     fonts-dejavu \
     fonts-liberation \
-    && rm -rf /var/lib/apt/lists/*
+    fontconfig \
+    && rm -rf /var/lib/apt/lists/* \
+    && fc-cache -fv
 
 WORKDIR /app
 

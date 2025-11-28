@@ -389,9 +389,31 @@ def download_image(filename):
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
+    # Test font loading
+    test_font = get_font(100, bold=True)
+    font_info = {
+        'font_type': str(type(test_font)),
+        'is_default': 'default' in str(type(test_font)).lower()
+    }
+    
+    # Check available fonts
+    available_fonts = []
+    font_paths_to_check = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    ]
+    for path in font_paths_to_check:
+        if os.path.exists(path):
+            available_fonts.append(path)
+    
     return jsonify({
         'status': 'healthy',
-        'templates': os.listdir(TEMPLATE_DIR) if os.path.exists(TEMPLATE_DIR) else []
+        'templates': os.listdir(TEMPLATE_DIR) if os.path.exists(TEMPLATE_DIR) else [],
+        'font_info': font_info,
+        'available_fonts': available_fonts,
+        'fonts_dir_exists': os.path.exists(FONTS_DIR),
+        'fonts_dir_contents': os.listdir(FONTS_DIR) if os.path.exists(FONTS_DIR) else []
     })
 
 @app.route('/', methods=['GET'])
