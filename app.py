@@ -142,11 +142,28 @@ def generate_slide_image(slide_data, output_path):
     img = Image.open(template_path).convert('RGB')
     draw = ImageDraw.Draw(img)
     
-    # Load fonts - LARGE SIZES for better readability
-    # Use Regular for both - simpler and guaranteed to work
-    # Increased sizes: main text much larger, sub text also larger
-    main_font = get_font(130, bold=False)
-    sub_font = get_font(75, bold=False)
+    # Optimized font sizes based on slide type
+    # Cover slides: Larger title for impact
+    # Content slides: Balanced sizes for readability
+    # CTA slides: Slightly larger to draw attention
+    if slide_number == 1:  # Cover slide
+        main_font_size = 140
+        sub_font_size = 72
+        line_spacing = 1.25
+        text_spacing = 50
+    elif slide_type == 'cta':  # CTA slide
+        main_font_size = 135
+        sub_font_size = 70
+        line_spacing = 1.25
+        text_spacing = 45
+    else:  # Content slides
+        main_font_size = 125
+        sub_font_size = 68
+        line_spacing = 1.3
+        text_spacing = 45
+    
+    main_font = get_font(main_font_size, bold=False)
+    sub_font = get_font(sub_font_size, bold=False)
     
     # Wrap text
     main_lines = []
@@ -166,36 +183,36 @@ def generate_slide_image(slide_data, output_path):
         img.save(output_path, 'PNG')
         return output_path
     
-    # Calculate total height
+    # Calculate total height with optimized spacing
     main_height = 0
     if main_lines:
         bbox = draw.textbbox((0, 0), main_lines[0], font=main_font)
-        main_height = (bbox[3] - bbox[1]) * len(main_lines) * 1.3
+        main_height = (bbox[3] - bbox[1]) * len(main_lines) * line_spacing
     
     sub_height = 0
     if sub_lines:
         bbox = draw.textbbox((0, 0), sub_lines[0], font=sub_font)
-        sub_height = (bbox[3] - bbox[1]) * len(sub_lines) * 1.3
+        sub_height = (bbox[3] - bbox[1]) * len(sub_lines) * line_spacing
     
-    spacing = 40 if main_lines and sub_lines else 0
+    spacing = text_spacing if main_lines and sub_lines else 0
     total_height = main_height + spacing + sub_height
     
     # Center vertically
     start_y = (IMAGE_HEIGHT - total_height) // 2
     
-    # Draw main text
+    # Draw main text with optimized spacing
     current_y = start_y
     for line in main_lines:
         line_height = draw_text_centered(draw, line, main_font, current_y, (0, 0, 0))
-        current_y += int(line_height * 1.3)
+        current_y += int(line_height * line_spacing)
     
     if main_lines and sub_lines:
         current_y += spacing
     
-    # Draw sub text
+    # Draw sub text with optimized spacing
     for line in sub_lines:
         line_height = draw_text_centered(draw, line, sub_font, current_y, (60, 60, 60))
-        current_y += int(line_height * 1.3)
+        current_y += int(line_height * line_spacing)
     
     # Save
     img.save(output_path, 'PNG')
@@ -305,12 +322,15 @@ def health_check():
 def debug_config():
     """Debug endpoint to check current font sizes and configuration"""
     return jsonify({
-        'main_font_size': 130,
-        'sub_font_size': 75,
+        'font_sizes': {
+            'cover': {'main': 140, 'sub': 72},
+            'content': {'main': 125, 'sub': 68},
+            'cta': {'main': 135, 'sub': 70}
+        },
         'image_width': IMAGE_WIDTH,
         'image_height': IMAGE_HEIGHT,
         'max_text_width': MAX_TEXT_WIDTH,
-        'version': '2.0.1'
+        'version': '2.1.0'
     })
 
 @app.route('/', methods=['GET'])
