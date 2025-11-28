@@ -137,7 +137,8 @@ def generate_slide_image(slide_data, output_path):
     draw = ImageDraw.Draw(img)
     
     # Load fonts - LARGE SIZES
-    main_font = get_font(90, bold=True)
+    # Use Regular for both - simpler and guaranteed to work
+    main_font = get_font(90, bold=False)
     sub_font = get_font(55, bold=False)
     
     # Wrap text
