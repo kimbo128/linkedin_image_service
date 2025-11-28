@@ -142,23 +142,23 @@ def generate_slide_image(slide_data, output_path):
     img = Image.open(template_path).convert('RGB')
     draw = ImageDraw.Draw(img)
     
-    # Optimized font sizes based on slide type - slightly smaller than before
+    # Optimized font sizes based on slide type - 25% smaller than before
     # Cover slides: Larger title for impact
     # Content slides: Balanced sizes for readability
     # CTA slides: Slightly larger to draw attention
     if slide_number == 1:  # Cover slide
-        main_font_size = 120
-        sub_font_size = 65
+        main_font_size = 90  # 120 * 0.75
+        sub_font_size = 49   # 65 * 0.75
         line_spacing = 1.25
         text_spacing = 50
     elif slide_type == 'cta':  # CTA slide
-        main_font_size = 115
-        sub_font_size = 63
+        main_font_size = 86   # 115 * 0.75
+        sub_font_size = 47    # 63 * 0.75
         line_spacing = 1.25
         text_spacing = 45
     else:  # Content slides
-        main_font_size = 110
-        sub_font_size = 60
+        main_font_size = 83   # 110 * 0.75
+        sub_font_size = 45    # 60 * 0.75
         line_spacing = 1.3
         text_spacing = 45
     
@@ -323,9 +323,9 @@ def debug_config():
     """Debug endpoint to check current font sizes and configuration"""
     return jsonify({
         'font_sizes': {
-            'cover': {'main': 120, 'sub': 65},
-            'content': {'main': 110, 'sub': 60},
-            'cta': {'main': 115, 'sub': 63}
+            'cover': {'main': 90, 'sub': 49},
+            'content': {'main': 83, 'sub': 45},
+            'cta': {'main': 86, 'sub': 47}
         },
         'image_width': IMAGE_WIDTH,
         'image_height': IMAGE_HEIGHT,
