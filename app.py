@@ -112,11 +112,17 @@ def generate_slide_image(slide_data, output_path):
     slide_number = slide_data.get('slideNumber', 1)
     
     # Support both formats: mainText/subText AND title/subtitle
-    main_text_raw = slide_data.get('mainText') or slide_data.get('title', '')
-    sub_text_raw = slide_data.get('subText') or slide_data.get('subtitle', '')
+    # Check both formats explicitly to ensure we get the text
+    main_text_raw = slide_data.get('mainText') or slide_data.get('title') or ''
+    sub_text_raw = slide_data.get('subText') or slide_data.get('subtitle') or ''
     
     main_text = str(main_text_raw).strip() if main_text_raw else ''
     sub_text = str(sub_text_raw).strip() if sub_text_raw else ''
+    
+    # Debug output for first slide
+    if slide_number == 1:
+        print(f"DEBUG Slide 1 - mainText: '{main_text}', subText: '{sub_text}'", flush=True)
+        print(f"DEBUG Slide 1 - raw data: {slide_data}", flush=True)
     
     slide_type = slide_data.get('type', 'content')
     
@@ -136,10 +142,11 @@ def generate_slide_image(slide_data, output_path):
     img = Image.open(template_path).convert('RGB')
     draw = ImageDraw.Draw(img)
     
-    # Load fonts - LARGE SIZES
+    # Load fonts - LARGE SIZES for better readability
     # Use Regular for both - simpler and guaranteed to work
-    main_font = get_font(90, bold=False)
-    sub_font = get_font(55, bold=False)
+    # Increased sizes: main text much larger, sub text also larger
+    main_font = get_font(130, bold=False)
+    sub_font = get_font(75, bold=False)
     
     # Wrap text
     main_lines = []
@@ -292,6 +299,18 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'templates': os.listdir(TEMPLATE_DIR) if os.path.exists(TEMPLATE_DIR) else []
+    })
+
+@app.route('/debug/config', methods=['GET'])
+def debug_config():
+    """Debug endpoint to check current font sizes and configuration"""
+    return jsonify({
+        'main_font_size': 130,
+        'sub_font_size': 75,
+        'image_width': IMAGE_WIDTH,
+        'image_height': IMAGE_HEIGHT,
+        'max_text_width': MAX_TEXT_WIDTH,
+        'version': '2.0.1'
     })
 
 @app.route('/', methods=['GET'])
