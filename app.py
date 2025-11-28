@@ -108,20 +108,26 @@ def find_font_file(filename):
 
 def get_font(size, bold=False):
     """Get font, fallback to default if custom font not available"""
+    app.logger.info(f"get_font called: size={size}, bold={bold}")
+    
     # Priority 1: Try Roboto fonts (downloaded on startup)
     if bold:
         font_file = find_font_file("Roboto-Bold.ttf")
+        app.logger.info(f"Looking for Roboto-Bold.ttf: {font_file}")
     else:
         font_file = find_font_file("Roboto-Regular.ttf")
+        app.logger.info(f"Looking for Roboto-Regular.ttf: {font_file}")
     
     # Priority 2: Try DejaVu Sans fonts (system fonts)
     if not font_file:
         if bold:
             font_file = find_font_file("DejaVuSans-Bold.ttf")
+            app.logger.info(f"Looking for DejaVuSans-Bold.ttf: {font_file}")
         else:
             font_file = find_font_file("DejaVuSans.ttf")
             if not font_file:
                 font_file = find_font_file("DejaVuSans-Regular.ttf")
+            app.logger.info(f"Looking for DejaVuSans: {font_file}")
     
     # Priority 3: Try Liberation Sans as fallback
     if not font_file:
@@ -129,12 +135,15 @@ def get_font(size, bold=False):
             font_file = find_font_file("LiberationSans-Bold.ttf")
         else:
             font_file = find_font_file("LiberationSans-Regular.ttf")
+        app.logger.info(f"Looking for LiberationSans: {font_file}")
     
     # Priority 4: Try Arial or Helvetica
     if not font_file:
         font_file = find_font_file("Arial.ttf")
+        app.logger.info(f"Looking for Arial.ttf: {font_file}")
     if not font_file:
         font_file = find_font_file("Helvetica.ttc")
+        app.logger.info(f"Looking for Helvetica.ttc: {font_file}")
     
     # Priority 5: Direct paths as last resort
     if not font_file:
@@ -145,20 +154,23 @@ def get_font(size, bold=False):
         for path in direct_paths:
             if os.path.exists(path):
                 font_file = path
+                app.logger.info(f"Found font via direct path: {font_file}")
                 break
     
     if font_file:
         try:
+            app.logger.info(f"Attempting to load font from {font_file} at size {size}")
             font = ImageFont.truetype(font_file, size)
-            app.logger.info(f"Successfully loaded font from {font_file} at size {size}")
+            app.logger.info(f"SUCCESS: Loaded font from {font_file} at size {size}, font type: {type(font)}")
             return font
         except Exception as e:
-            app.logger.error(f"Failed to load font from {font_file}: {str(e)}")
+            app.logger.error(f"FAILED to load font from {font_file}: {str(e)}", exc_info=True)
     
     # Last resort: Try to use ImageFont.load_default() but warn
-    app.logger.error(f"CRITICAL: No suitable font found! Using default font at size {size} (will be VERY small)")
+    app.logger.error(f"CRITICAL: No suitable font found! Using default font at size {size} (will be VERY small - ~8px)")
     app.logger.error("This will result in unreadable text. Please ensure system fonts are available.")
     default_font = ImageFont.load_default()
+    app.logger.error(f"Default font type: {type(default_font)}")
     return default_font
 
 def wrap_text(text, font, max_width, draw):
@@ -206,12 +218,23 @@ def draw_centered_text(draw, text, font, y_position, color=(0, 0, 0)):
 
 def generate_slide_image(slide_data, output_path):
     """Generate a single slide image"""
+    app.logger.info(f"=== GENERATING SLIDE IMAGE ===")
+    app.logger.info(f"slide_data: {slide_data}")
+    
     slide_number = slide_data.get('slideNumber', 1)
-    main_text = slide_data.get('mainText', '') or ''
-    sub_text = slide_data.get('subText', '') or ''
+    main_text_raw = slide_data.get('mainText', '')
+    sub_text_raw = slide_data.get('subText', '')
+    
+    app.logger.info(f"Slide {slide_number} - RAW INPUT: mainText='{main_text_raw}', subText='{sub_text_raw}'")
+    app.logger.info(f"Slide {slide_number} - mainText type: {type(main_text_raw)}, subText type: {type(sub_text_raw)}")
+    
+    main_text = main_text_raw or ''
+    sub_text = sub_text_raw or ''
     main_text = main_text.strip() if isinstance(main_text, str) else ''
     sub_text = sub_text.strip() if isinstance(sub_text, str) else ''
     slide_type = slide_data.get('type', 'content')
+    
+    app.logger.info(f"Slide {slide_number} - PROCESSED: mainText='{main_text}' (len={len(main_text)}), subText='{sub_text}' (len={len(sub_text)})")
     
     # Determine which template to use
     if slide_number == 1:
@@ -222,28 +245,53 @@ def generate_slide_image(slide_data, output_path):
         template_name = '2.png'
     
     template_path = os.path.join(TEMPLATE_DIR, template_name)
+    app.logger.info(f"Slide {slide_number} - Using template: {template_name} from {template_path}")
     
     if not os.path.exists(template_path):
         raise FileNotFoundError(f"Template {template_name} not found in {TEMPLATE_DIR}")
     
     img = Image.open(template_path).convert('RGBA')
     draw = ImageDraw.Draw(img)
+    app.logger.info(f"Slide {slide_number} - Image loaded: {img.size}")
     
     # Increased font sizes for better visibility - much larger for readability
     # Use bold for main text
+    app.logger.info(f"Slide {slide_number} - Loading fonts...")
     main_font = get_font(100, bold=True)
     sub_font = get_font(60, bold=False)
+    app.logger.info(f"Slide {slide_number} - Fonts loaded: main_font={type(main_font)}, sub_font={type(sub_font)}")
     
     # Only process text if it exists and is not empty
-    main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw) if main_text else []
-    sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw) if sub_text else []
+    app.logger.info(f"Slide {slide_number} - Wrapping text...")
+    app.logger.info(f"Slide {slide_number} - main_text is truthy: {bool(main_text)}, sub_text is truthy: {bool(sub_text)}")
+    
+    main_lines = []
+    sub_lines = []
+    
+    if main_text:
+        try:
+            app.logger.info(f"Slide {slide_number} - Wrapping main_text: '{main_text}'")
+            main_lines = wrap_text(main_text, main_font, MAX_TEXT_WIDTH, draw)
+            app.logger.info(f"Slide {slide_number} - Main text wrapped into {len(main_lines)} lines: {main_lines}")
+        except Exception as e:
+            app.logger.error(f"Slide {slide_number} - ERROR wrapping main_text: {str(e)}", exc_info=True)
+            main_lines = []
+    
+    if sub_text:
+        try:
+            app.logger.info(f"Slide {slide_number} - Wrapping sub_text: '{sub_text}'")
+            sub_lines = wrap_text(sub_text, sub_font, MAX_TEXT_WIDTH, draw)
+            app.logger.info(f"Slide {slide_number} - Sub text wrapped into {len(sub_lines)} lines: {sub_lines}")
+        except Exception as e:
+            app.logger.error(f"Slide {slide_number} - ERROR wrapping sub_text: {str(e)}", exc_info=True)
+            sub_lines = []
     
     # Debug: Log text information
-    app.logger.info(f"Slide {slide_number}: mainText='{main_text[:50]}...', subText='{sub_text[:50]}...', main_lines={len(main_lines)}, sub_lines={len(sub_lines)}")
+    app.logger.info(f"Slide {slide_number} - FINAL: main_lines={len(main_lines)}, sub_lines={len(sub_lines)}")
     
     # Debug: Log if no text to draw
     if not main_lines and not sub_lines:
-        app.logger.warning(f"Slide {slide_number} has no text to draw. mainText: '{main_text}', subText: '{sub_text}'")
+        app.logger.warning(f"Slide {slide_number} - WARNING: No text lines to draw! mainText: '{main_text}', subText: '{sub_text}'")
     
     # Calculate heights
     main_height = calculate_text_height(main_lines, main_font, draw) if main_lines else 0
@@ -259,34 +307,49 @@ def generate_slide_image(slide_data, output_path):
         start_y = IMAGE_HEIGHT // 2
     
     # Draw main text
+    app.logger.info(f"Slide {slide_number} - Starting to draw text. start_y={start_y}, total_height={total_height}")
     current_y = start_y
+    
     if main_lines:
-        app.logger.info(f"Drawing {len(main_lines)} main text lines starting at y={current_y}")
+        app.logger.info(f"Slide {slide_number} - Drawing {len(main_lines)} main text lines starting at y={current_y}")
         for idx, line in enumerate(main_lines):
-            bbox = draw.textbbox((0, 0), line, font=main_font)
-            line_height = bbox[3] - bbox[1]
-            draw_centered_text(draw, line, main_font, current_y, color=(0, 0, 0))
-            app.logger.debug(f"Drew main line {idx+1}: '{line[:30]}...' at y={current_y}, height={line_height}")
-            current_y += int(line_height * 1.5)
+            try:
+                bbox = draw.textbbox((0, 0), line, font=main_font)
+                line_height = bbox[3] - bbox[1]
+                app.logger.info(f"Slide {slide_number} - Drawing main line {idx+1}: '{line}' at y={current_y}, bbox={bbox}, height={line_height}")
+                draw_centered_text(draw, line, main_font, current_y, color=(0, 0, 0))
+                app.logger.info(f"Slide {slide_number} - Successfully drew main line {idx+1}")
+                current_y += int(line_height * 1.5)
+            except Exception as e:
+                app.logger.error(f"Slide {slide_number} - ERROR drawing main line {idx+1}: {str(e)}", exc_info=True)
+    else:
+        app.logger.warning(f"Slide {slide_number} - No main_lines to draw!")
     
     if main_lines and sub_lines:
         current_y += spacing_between
+        app.logger.info(f"Slide {slide_number} - Added spacing, current_y={current_y}")
     
     # Draw sub text
     if sub_lines:
-        app.logger.info(f"Drawing {len(sub_lines)} sub text lines starting at y={current_y}")
+        app.logger.info(f"Slide {slide_number} - Drawing {len(sub_lines)} sub text lines starting at y={current_y}")
         for idx, line in enumerate(sub_lines):
-            bbox = draw.textbbox((0, 0), line, font=sub_font)
-            line_height = bbox[3] - bbox[1]
-            draw_centered_text(draw, line, sub_font, current_y, color=(60, 60, 60))
-            app.logger.debug(f"Drew sub line {idx+1}: '{line[:30]}...' at y={current_y}, height={line_height}")
-            current_y += int(line_height * 1.5)
+            try:
+                bbox = draw.textbbox((0, 0), line, font=sub_font)
+                line_height = bbox[3] - bbox[1]
+                app.logger.info(f"Slide {slide_number} - Drawing sub line {idx+1}: '{line}' at y={current_y}, bbox={bbox}, height={line_height}")
+                draw_centered_text(draw, line, sub_font, current_y, color=(60, 60, 60))
+                app.logger.info(f"Slide {slide_number} - Successfully drew sub line {idx+1}")
+                current_y += int(line_height * 1.5)
+            except Exception as e:
+                app.logger.error(f"Slide {slide_number} - ERROR drawing sub line {idx+1}: {str(e)}", exc_info=True)
+    else:
+        app.logger.warning(f"Slide {slide_number} - No sub_lines to draw!")
     
     # Verify that text was actually drawn
     if main_lines or sub_lines:
-        app.logger.info(f"Completed drawing text for slide {slide_number}")
+        app.logger.info(f"Slide {slide_number} - Completed drawing text. Total lines drawn: main={len(main_lines) if main_lines else 0}, sub={len(sub_lines) if sub_lines else 0}")
     else:
-        app.logger.warning(f"No text was drawn for slide {slide_number}")
+        app.logger.warning(f"Slide {slide_number} - WARNING: No text was drawn at all!")
     
     # Ensure directory exists
     os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
