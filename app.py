@@ -4,6 +4,7 @@ import os
 import urllib.request
 from datetime import datetime
 import uuid
+import base64  # NEU HINZUGEFÜGT
 
 app = Flask(__name__)
 
@@ -296,6 +297,88 @@ def generate_carousel():
             'debug': debug_info
         }), 500
 
+# ============= NEUER BASE64 ENDPOINT - NICHTS GEÄNDERT AM ALTEN CODE =============
+@app.route('/generate-carousel-base64', methods=['POST'])
+def generate_carousel_base64():
+    """Generate carousel images and return as base64 - for n8n network bypass"""
+    debug_info = []
+    
+    try:
+        data = request.get_json()
+        if not data or 'slides' not in data:
+            return jsonify({'error': 'Invalid request', 'success': False}), 400
+        
+        slides = data['slides']
+        generated_images = []
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        request_id = str(uuid.uuid4())[:8]
+        
+        for idx, slide in enumerate(slides, 1):
+            slide_debug = {
+                'index': idx,
+                'slideNumber': slide.get('slideNumber', idx),
+                'raw_data': {
+                    'mainText': repr(slide.get('mainText', '')),
+                    'subText': repr(slide.get('subText', '')),
+                    'title': repr(slide.get('title', '')),
+                    'subtitle': repr(slide.get('subtitle', '')),
+                    'type': slide.get('type', 'content')
+                },
+                'processed': {
+                    'mainText': repr(slide.get('mainText') or slide.get('title', '')),
+                    'subText': repr(slide.get('subText') or slide.get('subtitle', ''))
+                }
+            }
+            
+            filename = f"image_{timestamp}_{request_id}_{idx}.png"
+            output_path = os.path.join(GENERATED_DIR, filename)
+            
+            # Generate image
+            try:
+                generate_slide_image(slide, output_path)
+                slide_debug['status'] = 'success'
+                
+                # Read and encode as base64
+                abs_path = os.path.abspath(output_path)
+                if os.path.exists(abs_path):
+                    with open(abs_path, 'rb') as f:
+                        image_data = f.read()
+                        base64_data = base64.b64encode(image_data).decode('utf-8')
+                    
+                    slide_debug['file_size'] = os.path.getsize(abs_path)
+                    slide_debug['file_path'] = abs_path
+                    slide_debug['base64_length'] = len(base64_data)
+                    
+                    generated_images.append({
+                        'slideNumber': slide.get('slideNumber', idx),
+                        'filename': filename,
+                        'base64': base64_data
+                    })
+                else:
+                    slide_debug['status'] = 'error'
+                    slide_debug['error'] = f'File not found at {abs_path}'
+            
+            except Exception as e:
+                slide_debug['status'] = 'error'
+                slide_debug['error'] = str(e)
+            
+            debug_info.append(slide_debug)
+        
+        return jsonify({
+            'success': True,
+            'images': generated_images,
+            'count': len(generated_images),
+            'debug': debug_info
+        })
+    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'debug': debug_info
+        }), 500
+# ============= ENDE NEUER ENDPOINT =============
+
 @app.route('/download/<filename>', methods=['GET'])
 def download_image(filename):
     """Download image"""
@@ -338,9 +421,10 @@ def index():
     """API info"""
     return jsonify({
         'service': 'LinkedIn Image Generator',
-        'version': '2.0.0',
+        'version': '2.1.0',
         'endpoints': {
-            'POST /generate-carousel': 'Generate images',
+            'POST /generate-carousel': 'Generate images with URLs',
+            'POST /generate-carousel-base64': 'Generate images as base64 (for n8n)',
             'GET /download/<filename>': 'Download image',
             'GET /health': 'Health check'
         }
