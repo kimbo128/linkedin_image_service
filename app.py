@@ -4,7 +4,9 @@ import os
 import urllib.request
 from datetime import datetime
 import uuid
-import base64  # NEU HINZUGEFÜGT
+import base64
+import io
+import requests
 
 app = Flask(__name__)
 
@@ -120,9 +122,14 @@ def generate_slide_image(slide_data, output_path):
     main_text = str(main_text_raw).strip() if main_text_raw else ''
     sub_text = str(sub_text_raw).strip() if sub_text_raw else ''
     
+    # NEU: Featured Image für Template 1
+    featured_image_url = slide_data.get('featuredImage', '')
+    featured_image_base64 = slide_data.get('featuredImageBase64', '')
+    
     # Debug output for first slide
     if slide_number == 1:
         print(f"DEBUG Slide 1 - mainText: '{main_text}', subText: '{sub_text}'", flush=True)
+        print(f"DEBUG Slide 1 - featuredImage: '{featured_image_url}'", flush=True)
         print(f"DEBUG Slide 1 - raw data: {slide_data}", flush=True)
     
     slide_type = slide_data.get('type', 'content')
@@ -143,6 +150,43 @@ def generate_slide_image(slide_data, output_path):
     img = Image.open(template_path).convert('RGB')
     draw = ImageDraw.Draw(img)
     
+    # NEU: Featured Image für Template 1 in der Mitte einfügen
+    if slide_number == 1 and (featured_image_url or featured_image_base64):
+        try:
+            featured_img = None
+            
+            # Von URL laden
+            if featured_image_url:
+                response = requests.get(featured_image_url, timeout=10)
+                featured_img = Image.open(io.BytesIO(response.content))
+            # Von Base64 laden
+            elif featured_image_base64:
+                img_data = base64.b64decode(featured_image_base64)
+                featured_img = Image.open(io.BytesIO(img_data))
+            
+            if featured_img:
+                # Featured Image Größe: Breite 800px, Höhe proportional
+                target_width = 800
+                aspect_ratio = featured_img.height / featured_img.width
+                target_height = int(target_width * aspect_ratio)
+                
+                # Max Höhe: 600px
+                if target_height > 600:
+                    target_height = 600
+                    target_width = int(target_height / aspect_ratio)
+                
+                featured_img = featured_img.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                
+                # Position: Horizontal zentriert, vertikal in der Mitte (Y: 600-750 Bereich)
+                x_pos = (IMAGE_WIDTH - target_width) // 2
+                y_pos = 650  # Mitte des Slides
+                
+                img.paste(featured_img, (x_pos, y_pos))
+                print(f"Featured image added at ({x_pos}, {y_pos}), size: {target_width}x{target_height}", flush=True)
+        
+        except Exception as e:
+            print(f"ERROR: Failed to load featured image: {e}", flush=True)
+    
     # Optimized font sizes based on slide type - 25% smaller than before
     # Cover slides: Larger title for impact
     # Content slides: Balanced sizes for readability
@@ -152,16 +196,19 @@ def generate_slide_image(slide_data, output_path):
         sub_font_size = 49   # 65 * 0.75
         line_spacing = 1.25
         text_spacing = 50
+        y_offset = 0  # Kein Offset, da Logo nach oben verschoben wurde
     elif slide_type == 'cta':  # CTA slide
         main_font_size = 86   # 115 * 0.75
         sub_font_size = 47    # 63 * 0.75
         line_spacing = 1.25
         text_spacing = 45
+        y_offset = 100  # Logo nach unten -> Text muss tiefer starten
     else:  # Content slides
         main_font_size = 83   # 110 * 0.75
         sub_font_size = 45    # 60 * 0.75
         line_spacing = 1.3
         text_spacing = 45
+        y_offset = 100  # Logo nach unten -> Text muss tiefer starten
     
     main_font = get_font(main_font_size, bold=False)
     sub_font = get_font(sub_font_size, bold=False)
@@ -198,8 +245,8 @@ def generate_slide_image(slide_data, output_path):
     spacing = text_spacing if main_lines and sub_lines else 0
     total_height = main_height + spacing + sub_height
     
-    # Center vertically
-    start_y = (IMAGE_HEIGHT - total_height) // 2
+    # Center vertically + apply y_offset
+    start_y = (IMAGE_HEIGHT - total_height) // 2 + y_offset
     
     # Draw main text with optimized spacing
     current_y = start_y
@@ -410,10 +457,20 @@ def debug_config():
             'content': {'main': 83, 'sub': 45},
             'cta': {'main': 86, 'sub': 47}
         },
+        'y_offsets': {
+            'cover': 0,
+            'content': 100,
+            'cta': 100
+        },
+        'featured_image': {
+            'max_width': 800,
+            'max_height': 600,
+            'y_position': 650
+        },
         'image_width': IMAGE_WIDTH,
         'image_height': IMAGE_HEIGHT,
         'max_text_width': MAX_TEXT_WIDTH,
-        'version': '2.1.0'
+        'version': '2.2.0'
     })
 
 @app.route('/', methods=['GET'])
@@ -421,12 +478,17 @@ def index():
     """API info"""
     return jsonify({
         'service': 'LinkedIn Image Generator',
-        'version': '2.1.0',
+        'version': '2.2.0',
         'endpoints': {
             'POST /generate-carousel': 'Generate images with URLs',
             'POST /generate-carousel-base64': 'Generate images as base64 (for n8n)',
             'GET /download/<filename>': 'Download image',
-            'GET /health': 'Health check'
+            'GET /health': 'Health check',
+            'GET /debug/config': 'Show configuration'
+        },
+        'new_features': {
+            'featured_image': 'Add featuredImage URL or featuredImageBase64 to slide 1',
+            'optimized_positioning': 'Template 2&3 text moved +100px down for logo space'
         }
     })
 
