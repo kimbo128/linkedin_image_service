@@ -150,7 +150,10 @@ def generate_slide_image(slide_data, output_path):
     img = Image.open(template_path).convert('RGB')
     draw = ImageDraw.Draw(img)
     
-    # NEU: Featured Image für Template 1 in der Mitte einfügen
+    # NEU: Featured Image für Template 1 OBEN einfügen
+    featured_img_height = 0
+    has_featured_image = False
+    
     if slide_number == 1 and (featured_image_url or featured_image_base64):
         try:
             featured_img = None
@@ -158,31 +161,47 @@ def generate_slide_image(slide_data, output_path):
             # Von URL laden
             if featured_image_url:
                 response = requests.get(featured_image_url, timeout=10)
-                featured_img = Image.open(io.BytesIO(response.content))
+                featured_img = Image.open(io.BytesIO(response.content)).convert('RGBA')
             # Von Base64 laden
             elif featured_image_base64:
                 img_data = base64.b64decode(featured_image_base64)
-                featured_img = Image.open(io.BytesIO(img_data))
+                featured_img = Image.open(io.BytesIO(img_data)).convert('RGBA')
             
             if featured_img:
-                # Featured Image Größe: Breite 800px, Höhe proportional
-                target_width = 800
+                # Featured Image Größe: Breite 700px, Höhe proportional
+                target_width = 700
                 aspect_ratio = featured_img.height / featured_img.width
                 target_height = int(target_width * aspect_ratio)
                 
-                # Max Höhe: 600px
-                if target_height > 600:
-                    target_height = 600
+                # Max Höhe: 450px
+                if target_height > 450:
+                    target_height = 450
                     target_width = int(target_height / aspect_ratio)
                 
                 featured_img = featured_img.resize((target_width, target_height), Image.Resampling.LANCZOS)
                 
-                # Position: Horizontal zentriert, vertikal in der Mitte (Y: 600-750 Bereich)
-                x_pos = (IMAGE_WIDTH - target_width) // 2
-                y_pos = 650  # Mitte des Slides
+                # Abgerundete Ecken hinzufügen
+                radius = 30  # Radius für abgerundete Ecken
+                mask = Image.new('L', (target_width, target_height), 0)
+                mask_draw = ImageDraw.Draw(mask)
+                mask_draw.rounded_rectangle(
+                    [(0, 0), (target_width, target_height)],
+                    radius=radius,
+                    fill=255
+                )
                 
-                img.paste(featured_img, (x_pos, y_pos))
-                print(f"Featured image added at ({x_pos}, {y_pos}), size: {target_width}x{target_height}", flush=True)
+                # Maske auf das Bild anwenden
+                featured_img.putalpha(mask)
+                
+                # Position: Horizontal zentriert, OBEN (unter dem Logo)
+                x_pos = (IMAGE_WIDTH - target_width) // 2
+                y_pos = 280  # Oben, unter dem AM Logo
+                
+                # Bild einfügen mit Alpha-Kanal (für abgerundete Ecken)
+                img.paste(featured_img, (x_pos, y_pos), featured_img)
+                featured_img_height = target_height
+                has_featured_image = True
+                print(f"Featured image added at ({x_pos}, {y_pos}), size: {target_width}x{target_height}, rounded corners: {radius}px", flush=True)
         
         except Exception as e:
             print(f"ERROR: Failed to load featured image: {e}", flush=True)
@@ -246,7 +265,13 @@ def generate_slide_image(slide_data, output_path):
     total_height = main_height + spacing + sub_height
     
     # Center vertically + apply y_offset
-    start_y = (IMAGE_HEIGHT - total_height) // 2 + y_offset
+    # Für Slide 1 mit Featured Image: Text UNTER dem Bild
+    if slide_number == 1 and has_featured_image:
+        # Text beginnt direkt unter dem Featured Image
+        start_y = 280 + featured_img_height + 60  # Image Y-Pos + Höhe + Abstand
+    else:
+        # Normale Zentrierung
+        start_y = (IMAGE_HEIGHT - total_height) // 2 + y_offset
     
     # Draw main text with optimized spacing
     current_y = start_y
@@ -463,14 +488,16 @@ def debug_config():
             'cta': 100
         },
         'featured_image': {
-            'max_width': 800,
-            'max_height': 600,
-            'y_position': 650
+            'max_width': 700,
+            'max_height': 450,
+            'y_position': 280,
+            'border_radius': 30,
+            'layout': 'Image OBEN → Titel → Untertitel'
         },
         'image_width': IMAGE_WIDTH,
         'image_height': IMAGE_HEIGHT,
         'max_text_width': MAX_TEXT_WIDTH,
-        'version': '2.2.0'
+        'version': '2.2.1'
     })
 
 @app.route('/', methods=['GET'])
@@ -478,7 +505,7 @@ def index():
     """API info"""
     return jsonify({
         'service': 'LinkedIn Image Generator',
-        'version': '2.2.0',
+        'version': '2.2.1',
         'endpoints': {
             'POST /generate-carousel': 'Generate images with URLs',
             'POST /generate-carousel-base64': 'Generate images as base64 (for n8n)',
@@ -488,7 +515,8 @@ def index():
         },
         'new_features': {
             'featured_image': 'Add featuredImage URL or featuredImageBase64 to slide 1',
-            'optimized_positioning': 'Template 2&3 text moved +100px down for logo space'
+            'layout': 'Slide 1: Featured Image OBEN → Titel → Untertitel',
+            'rounded_corners': '30px border radius on featured images'
         }
     })
 
